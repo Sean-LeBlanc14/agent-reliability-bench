@@ -4,6 +4,9 @@ A controlled study of how scaffold choice affects agent reliability,
 using text2sql as the testbed. The eval harness is the product;
 the agent is the test subject.
 
+Model: Qwen2.5-Coder-1.5B + QLoRA adapter
+(see [text2sql](https://github.com/Sean-LeBlanc14/text2sql))
+
 ## Preregistered Hypotheses (written 2026-07-15, before implementation)
 
 - **H1a (total scaffold effect):** Agent + repair (arm 3) lifts task
