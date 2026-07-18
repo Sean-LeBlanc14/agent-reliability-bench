@@ -26,11 +26,37 @@ Three-arm comparison, same model, same benchmark:
 2. **Agent, no repair** - observe -> generate -> execute -> answer, step-capped
 3. **Agent + repair** - arm 2 plus error-feedback re-generation
 
-Grading: agent must output `ANSWER: <value(s)>`, graded by normalized
-exact-match against gold rows. No LLM judge. Fully reproducible.
+Grading: the agent must end its output with `ANSWER: <value(s)>`, parsed and
+graded by normalized exact-match against executed gold rows. Row order is
+enforced only when the gold query orders its result; otherwise comparison is
+multiset (duplicate-sensitive). Column permutations are accepted, numerics
+are coerced and rounded, and unparseable answers are their own failure
+status. No LLM judge. The comparison core is inherited from the Project 1
+scorer, where it was validated by unit tests and produced the published
+execution-accuracy numbers; the grader here adds the answer-parsing layer
+(44 tests total).
 
-Benchmark: ~100-150 Spider dev questions, stratified by difficulty.
-Model: Qwen2.5-Coder-1.5B + QLoRA adapter (see [text2sql](https://github.com/Sean-LeBlanc14/text2sql))
+## Benchmark
+
+150 questions sampled from Spider dev (1,034 examples), proportionally
+stratified by the official Spider hardness classifier (easy/medium/hard/extra,
+via vendored [taoyds/spider](https://github.com/taoyds/spider) evaluation
+code). Sampling is deterministic (seed 42) and fully regenerable:
+classify -> filter -> sample -> execute gold SQL.
+
+**Eligibility rule (applied before sampling, before any arm ran):** tasks
+whose gold result exceeds 20 rows are excluded (70/1,034, 6.8% of the pool).
+The answer-emission grading format requires the agent to output the complete
+result set; beyond ~20 rows the task measures output-length stamina rather
+than reliability. The threshold was fixed from the pool's row-count
+distribution (p95 = 28, then a cliff to 753+) prior to measuring any arm.
+
+Each task stores the question, db_id, gold SQL, executed gold rows, official
+difficulty, and an `order_matters` flag (true iff the gold query has a
+top-level `ORDER BY` — subquery ORDER BY does not constrain outer row order).
+
+Spider dev obtained via HuggingFace export; train/dev disjointness verified
+during Project 1's contamination audit.
 
 ## Results
 
@@ -39,4 +65,3 @@ Model: Qwen2.5-Coder-1.5B + QLoRA adapter (see [text2sql](https://github.com/Sea
 ## Reproduce
 
 *(pending)*
-
