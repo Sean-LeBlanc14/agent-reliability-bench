@@ -22,9 +22,11 @@ MAX_GOLD_ROWS = 20
 
 def main():
     examples = [json.loads(l) for l in open(IN_FILE)]
+    pool_size = len(examples)
+    n_empty = sum(1 for ex in examples if ex["gold_row_count"] == 0)
     examples = [
         ex for ex in examples
-        if ex["gold_row_count"] is not None and ex["gold_row_count"] <= MAX_GOLD_ROWS
+        if ex["gold_row_count"] is not None and 0 < ex["gold_row_count"] <= MAX_GOLD_ROWS
     ]
 
     by_diff = defaultdict(list)
@@ -32,7 +34,8 @@ def main():
         by_diff[ex["difficulty"]].append(ex)
 
     total = len(examples)
-    print(f"eligible pool: {total} / 1034")
+    print(f"eligible pool: {total} / {pool_size}")
+    print(f"excluded for empty gold (0 rows): {n_empty} / {pool_size}")
 
     quotas = {d: N_TOTAL * len(by_diff[d]) / total for d in DIFFICULTIES}
     alloc = {d: int(quotas[d]) for d in DIFFICULTIES}

@@ -39,8 +39,12 @@ def main():
     for thresh in (10, 20, 50, 100):
         over = sum(1 for c in counts if c > thresh)
         print(f"  tasks with >{thresh} rows: {over}")
+    empty = [(tid, db, diff) for _, n, tid, db, diff in stats if n == 0]
+    print(f"\nempty-gold (0 rows): {len(empty)}")
+    for tid, db, diff in empty:
+        print(f" {tid} {db:24s} {diff}")
     slow = sum(1 for dt, *_ in stats if dt > 5)
-    print(f"tasks slower than 5s: {slow}")
+    print(f"\ntasks slower than 5s: {slow}")
 
 
 if __name__ == "__main__":

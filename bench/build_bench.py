@@ -53,6 +53,8 @@ def main():
             t["gold_rows"] = [list(r) for r in rows]
             assert len(t["gold_rows"]) <= 20, \
                 f"{t['task_id']}: {len(t['gold_rows'])} gold rows - sampler let an ineligible task through"
+            assert len(t["gold_rows"]) > 0, \
+                f"{t['task_id']}: empty gold rows - sampler let an ineligible task through"
             t["order_matters"] = order_matters(t["gold_sql"])
             if len(rows) > max_rows:
                 max_rows, max_rows_task = len(rows), t["task_id"]
