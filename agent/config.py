@@ -23,6 +23,9 @@ CONFIG = {
     "seed": {
         "base": 1234,
     },
+    "agent": {
+        "max_attempts": 3, # total generate_sql calls: attempt_idx 0..2, one initial + two resamples
+    }
 }
 
 
