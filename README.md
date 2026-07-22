@@ -33,8 +33,8 @@ Two models, held constant across all three arms:
   question (+ optional error/prev SQL) in, SQL out.
 
 **No-SQL-authorship constraint:** the orchestrator never writes SQL. Enforced structurally — every
-tool output carries an ID, and the executor only runs SQL bearing a valid tool-output ID. Trace tests
-assert the invariant.
+tool output carries an ID, and the executor only runs SQL bearing a valid tool-output ID. Unit tests
+assert the invariant (`tests/test_invariants.py`).
 
 **Tool-input contract:** inputs limited to `(question)` on the first attempt, or
 `(question + executor error + previous SQL)` on repair. No free-text rephrasing — closes the
@@ -103,7 +103,8 @@ export ANTHROPIC_API_KEY=...          # orchestrator calls
 python bench/classify_difficulty.py   # Spider dev -> difficulty labels
 python bench/sample_benchmark.py      # eligibility filter + stratified sample (seed 42)
 python bench/build_bench.py           # execute gold -> bench.jsonl
-python bench/test_grader.py           # 46 tests, no data or model needed
+
+pytest tests/                         # grader + invariant tests, no data or model needed
 
 python run_smoke.py                   # arm 1, k=1, pipeline validation
 python analysis/failure_breakdown.py  # pass@1 + ANSWER-vs-rows decomposition

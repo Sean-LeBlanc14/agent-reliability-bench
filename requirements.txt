@@ -6,3 +6,4 @@ peft
 bitsandbytes
 accelerate
 datasets
+pytest
