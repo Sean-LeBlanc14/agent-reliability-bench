@@ -1,4 +1,4 @@
-"""Arm 1 (single-shot) over the full bench, k=1, tagged smoke."""
+"""Arm 1 (single-shot) over a bench slice. Tag `smoke` for pipeline checks, `main` for reported runs"""
 
 from __future__ import annotations
 
@@ -24,12 +24,11 @@ from bench.grader import grade, parse_answer
 
 BENCH = REPO_ROOT / "bench" / "bench.jsonl"
 ARM = 1
-RUN_IDX = 0 # smoke is k=1; this is run 0
 
 
-def run_single_shot(tool, executor, llm, task):
+def run_single_shot(tool, executor, llm, task, run_idx):
     """One arm-1 episode: generate -> execute -> extract -> grade. No loop, no repair"""
-    r = tool.generate_sql(task["task_id"], task["db_id"], task["question"], RUN_IDX, attempt_idx=0)
+    r = tool.generate_sql(task["task_id"], task["db_id"], task["question"], run_idx, attempt_idx=0)
     res = executor.run(task["db_id"], r["sql"], r["tool_output_id"])
 
     attempt = {
@@ -60,7 +59,7 @@ def run_single_shot(tool, executor, llm, task):
         "db_id": task["db_id"],
         "difficulty": task["difficulty"],
         "arm": ARM,
-        "run_idx": RUN_IDX,
+        "run_idx": run_idx,
         "attempts": [attempt],
         "extraction_prompt": ext_prompt,
         "answer_raw": answer_raw,
@@ -74,6 +73,8 @@ def run_single_shot(tool, executor, llm, task):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=None, help="cap tasks (PASS check on a slice)")
+    ap.add_argument("--run-idx", type=int, default=0, help="k index; seeds derive from it")
+    ap.add_argument("--tag", choices=["smoke", "main"], default="smoke")
     args = ap.parse_args()
 
     tasks = [json.loads(l) for l in open(BENCH)]
@@ -87,24 +88,25 @@ def main():
     by_diff = defaultdict(lambda: [0, 0]) # difficulty -> [correct, total]
     t0 = time.perf_counter()
 
-    with Tracer(REPO_ROOT / "runs", "smoke", CONFIG_HASH, llm.model) as tracer:
+    with Tracer(REPO_ROOT / "runs", args.tag, ARM, args.run_idx, CONFIG_HASH, llm.model) as tracer:
         for i, task in enumerate(tasks):
-            ep = run_single_shot(tool, executor, llm, task)
+            ep = run_single_shot(tool, executor, llm, task, args.run_idx)
             tracer.log_episode(**ep)
             by_diff[ep["difficulty"]][0] += int(ep["correct"])
             by_diff[ep["difficulty"]][1] += 1
             print("." if ep["correct"] else "x", end="", flush=True)
             if (i + 1) % 50 == 0:
                 print(f"  {i + 1}/{len(tasks)}")
+        tracer.close(usage=llm.usage)
 
     dt = time.perf_counter() - t0
     total = len(tasks)
     correct = sum(c for c, _ in by_diff.values())
 
-    print("\n\nsmoke run (arm 1, k=1) - CALIBRATION ONLY, never reported")
+    note = "pipeline check - not a reported number" if args.tag == "smoke" else "reported run"
+    print(f"\n\narm {ARM} run_idx {args.run_idx} [{args.tag}] {note}")
     print(f"traces: {tracer.path}")
     print(f"episodes: {total}  wall: {dt:.1f}s  ({dt / total:.2f}s/episode)")
-    print(f"extrapolated Day 7 (~1350 episodes): {dt / total * 1350 / 60:.1f} min at this rate")
     print(f"pass@1 overall: {correct}/{total} = {correct / total:.1%}")
     for d in ("easy", "medium", "hard", "extra"):
         c, n = by_diff[d]

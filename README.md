@@ -21,6 +21,35 @@ Tool model: Qwen2.5-Coder-1.5B + QLoRA adapter
 *Amended 2026-07-19, before any agent data was collected: H1b restated as the
 error-feedback effect at equal retry budget, matching the pinned arm-2 (resample-only) semantics.*
 
+### Pre-registered limitation, repair prompts are out of distribution
+
+The tool adapter was fine-tuned on a single zero-shot turn (schema, question,
+`SQL:` cue) with bare SQL as the completion. Arm 3 injects the previous query
+and the executor error into that question slot, a shape the adapter never saw
+in training. Arm 3 therefore carries a format cost that arms 1 and 2 do not.
+
+A five-task render check before code freeze found the tool reproducing the
+previous query verbatim when shown it, consuming a retry attempt. The tool
+repeated on 2 of 5 tasks, while a same-seed arm-2 control resampling the
+original prompt produced distinct SQL on all 12 attempts, so the repetition is
+attributable to the repair context rather than to sampling. One alternate
+rendering of the closing instruction was tried, replacing "Write a single
+corrected SQL query that answers the question." with "Write a new SQL query
+that fixes the error and answers the question." At identical seeds it was not
+better, so it was reverted and the original wording stands.
+
+Consequence for H1b. A weak or null H1b is consistent with two explanations,
+that error feedback carries little value for this agent, or that this tool
+cannot consume error feedback in this format. The design cannot separate them.
+H1a is unaffected in kind, since its estimand is the total effect of the
+scaffold as built and format cost is part of that.
+
+For arms 2 and 3 we will report the share of re-query attempts whose SQL is
+byte-identical to the immediately preceding attempt. Because seeds are
+arm-independent, the two arms resample under matched seeds and differ only in
+prompt content, so a gap between them isolates the effect of the repair
+context on tool variance.
+
 ## Design
 
 ### Architecture
@@ -106,8 +135,16 @@ python bench/build_bench.py           # execute gold -> bench.jsonl
 
 pytest tests/                         # grader + invariant tests, no data or model needed
 
-python run_smoke.py                   # arm 1, k=1, pipeline validation
+# pipeline validation, one run per arm
+python run_arm1.py  --run-idx 0 --tag smoke            # arm 1, single-shot
+python run_agent.py --arm 2 --run-idx 0 --tag smoke    # arm 2, resample-on-failure
+python run_agent.py --arm 3 --run-idx 0 --tag smoke    # arm 3, resample-with-error-feedback
+
 python analysis/failure_breakdown.py  # pass@1 + ANSWER-vs-rows decomposition
 ```
+
+Reported runs use `--tag main` and `--run-idx {0,1,2}`. Trace filenames carry
+the tag, arm and run index, so the nine cells are distinguishable without
+opening them.
 
 Traces land in `runs/` (gitignored); per-run reports in `analysis/reports/`.

@@ -25,6 +25,8 @@ class LLM:
         self._client = anthropic.Anthropic(max_retries=_MAX_RETRIES)
         self._model = CONFIG["orchestrator"]["model"]
         self._temperature = CONFIG["orchestrator"]["temperature"]
+        self._input_tokens = 0
+        self._output_tokens = 0
 
 
     def complete(self, system: str, messages: list[dict]) -> str:
@@ -41,6 +43,9 @@ class LLM:
             messages=messages,
         )
 
+        # Accumulated rather than returned
+        self._input_tokens += resp.usage.input_tokens
+        self._output_tokens += resp.usage.output_tokens
         return "".join(b.text for b in resp.content if b.type == "text")
 
 
@@ -48,3 +53,8 @@ class LLM:
     def model(self) -> str:
         # Exposed so the harness can stamp the pinned string into every trace
         return self._model
+
+    @property
+    def usage(self) -> dict[str, int]:
+        # Cumulative per process, which is per cell, since each cell is its own run
+        return {"input_tokens": self._input_tokens, "output_tokens": self._output_tokens}

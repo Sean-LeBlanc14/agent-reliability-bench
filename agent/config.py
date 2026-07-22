@@ -25,7 +25,15 @@ CONFIG = {
     },
     "agent": {
         "max_attempts": 3, # total generate_sql calls: attempt_idx 0..2, one initial + two resamples
-    }
+    },
+    "repair": {
+        # descriptive, not directiveL telling the tool what to fix would smuggle
+        # orchestrator judgement into the manipulated variable
+        "empty_result_message": "The query returned an empty result set (zero rows).",
+        # sqlite puts the diagnostic first, so head-truncate; cap is generous
+        # enough that firing at all is itself a signal worth logging
+        "max_error_chars": 300,
+    },
 }
 
 

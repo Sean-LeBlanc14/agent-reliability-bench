@@ -1,4 +1,4 @@
-"""Arm 2 (resample-on-failure) over a bench slice. Pipeline check, not a measurement"""
+"""Arm 2 and 3 over a bench slice. Tag `smoke` for pipeline checks, `main` for reported runs"""
 
 from __future__ import annotations
 
@@ -18,17 +18,19 @@ from agent.config import CONFIG, CONFIG_HASH
 from agent.tool import Tool
 from agent.executor import Executor, read_only_query
 from agent.llm import LLM
-from agent.loop import run_episode
+from agent.loop import run_episode, ARM_RESAMPLE, ARM_REPAIR
 from agent.trace import Tracer
 
 BENCH = REPO_ROOT / "bench" / "bench.jsonl"
-RUN_IDX = 0
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--task-ids", default=None, help="comma-separated; overrides --limit")
+    ap.add_argument("--arm", type=int, choices=[ARM_RESAMPLE, ARM_REPAIR], default=ARM_RESAMPLE)
+    ap.add_argument("--run-idx", type=int, default=0, help="k index; seeds derive from it")
+    ap.add_argument("--tag", choices=["smoke", "main"], default="smoke")
     args = ap.parse_args()
 
     tasks = [json.loads(l) for l in open(BENCH)]
@@ -45,18 +47,20 @@ def main():
     episodes = []
     t0 = time.perf_counter()
 
-    with Tracer(REPO_ROOT / "runs", "smoke", CONFIG_HASH, llm.model) as tracer:
+    with Tracer(REPO_ROOT / "runs", args.tag, args.arm, args.run_idx, CONFIG_HASH, llm.model) as tracer:
         for task in tasks:
-            ep = run_episode(tool, executor, llm, task, RUN_IDX)
+            ep = run_episode(tool, executor, llm, task, args.run_idx, arm=args.arm)
             tracer.log_episode(**ep)
             episodes.append(ep)
             print("." if ep["correct"] else "x", end="", flush=True)
+        tracer.close(usage=llm.usage)
 
     dt = time.perf_counter() - t0
     n = len(episodes)
     correct = sum(int(e["correct"]) for e in episodes)
 
-    print(f"\n\narm 2 pipeline check - not a reported number")
+    note = "pipeline check - not a reported number" if args.tag == "smoke" else "reported run"
+    print(f"\n\narm {args.arm} run_idx {args.run_idx} [{args.tag}] {note}")
     print(f"traces: {tracer.path}")
     print(f"episodes: {n}  wall: {dt:.1f}s  ({dt / n:.2f}s/episode)")
     print(f"pass@1: {correct}/{n}")

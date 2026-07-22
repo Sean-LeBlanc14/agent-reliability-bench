@@ -83,13 +83,12 @@ class Tool:
             raise ValueError(
                 "repair context is both or neither: pass previous_sql and executor_error together"
             )
-
-        messages = build_messages(self._run_query, db_id, question, few_shots=[])
+        
+        error_truncated = False
         if previous_sql is not None:
-            messages.append({"role": "assistant", "content": previous_sql})
-            messages.append(
-                {"role": "user", "content": f"That query failed:\n{executor_error}\nSQL:"}
-            )
+            error_text, error_truncated = _truncate_error(executor_error)
+            question = _repair_question(question, previous_sql, error_text)
+        messages = build_messages(self._run_query, db_id, question, few_shots=[])
 
         prompt = self._tokenizer.apply_chat_template(
             messages, add_generation_prompt=True, tokenize=False
@@ -112,7 +111,7 @@ class Tool:
 
         tool_output_id = uuid.uuid4().hex
         self._registry[tool_output_id] = sql
-        return {"sql": sql, "tool_output_id": tool_output_id, "prompt": prompt}
+        return {"sql": sql, "tool_output_id": tool_output_id, "prompt": prompt, "error_truncated": error_truncated}
 
 
     def verify(self, tool_output_id: str, sql: str) -> bool:
@@ -128,3 +127,32 @@ def _strip_fence(text: str) -> str:
         if t.rstrip().endswith("```"):
             t = t.rstrip()[:-3]
     return t.strip()
+
+
+def _repair_question(question: str, previous_sql: str, error_text: str) -> str:
+    """
+    Repair context rides in the question slot rather than extra chat turns. The
+    adapter trained on a single zero-shot user turn (build_prompt_completion ->
+    few_shots=[]), so appending assistant/user turns changes the block structure
+    the weights were tuned on. Question stays first so attempt 0 and repair
+    attempts share the longest identical prefix. No trailing SQL: cue here,
+    _user_turn supplies it.
+    """
+
+    return (
+        f"{question}\n\n"
+        f"Previous query:\n{previous_sql}\n"
+        f"Error:\n{error_text}\n"
+        "Write a single corrected SQL query that answers the question."
+    )
+
+
+def _truncate_error(error_text: str) -> tuple[str, bool]:
+    # Head-truncate: sqlite puts the diagnostic first, so the tail is the
+    # expendable part. Flag rides into the trace as a candidate explanation
+    # if repair underperforms.
+    cap = CONFIG["repair"]["max_error_chars"]
+    if len(error_text) <= cap:
+        return error_text, False
+    return error_text[:cap] + " ...[truncated]", True
+

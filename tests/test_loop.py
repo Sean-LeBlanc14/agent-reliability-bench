@@ -1,11 +1,12 @@
 """
-Arm-2 loop semantics, tested rather than asserted.
+Arm-2 and arm-3 loop semantics, tested rather than asserted.
 
-Two things here are load-bearing and invisible at runtime. First, arm 2 must
-never pass repair context to the tool: that omission is the only difference
-between arm 2 and arm 3, so H1b depends on it and a copy-paste while building
-arm 3 could silently erase it. Second, the step cap must bind, since arms 2
-and 3 share it and an off-by-one would confound feedback with attempt budget.
+Two things here are load-bearing and invisible at runtime. First, the arm 2 /
+arm 3 boundary must hold in both directions: arm 2 must never pass repair
+context to the tool, and arm 3 must always pass it on re-query. That single
+difference is what H1b measures, so a copy-paste in either direction would
+silently erase the result. Second, the step cap must bind, since arms 2 and 3
+share it and an off-by-one would confound feedback with attempt budget.
 
 Stubs stand in for the tool and the orchestrator, but the Executor is real,
 so the tool-output-id gate is exercised rather than mocked - the loop cannot
@@ -21,7 +22,7 @@ sys.path.insert(0, str(ROOT / "vendor"))
 
 from agent.config import CONFIG
 from agent.executor import Executor
-from agent.loop import run_episode
+from agent.loop import run_episode, ARM_RESAMPLE, ARM_REPAIR
 
 DB_ID = "car_1"
 OK = "SELECT 1;"
@@ -57,7 +58,7 @@ class StubTool:
         sql = self._script[min(attempt_idx, len(self._script) - 1)]
         tid = f"tid-{attempt_idx}"
         self._registry[tid] = sql
-        return {"sql": sql, "tool_output_id": tid, "prompt": f"<prompt {attempt_idx}>"}
+        return {"sql": sql, "tool_output_id": tid, "prompt": f"<prompt {attempt_idx}>", "error_truncated": False}
 
     def verify(self, tool_output_id, sql):
         return self._registry.get(tool_output_id) == sql
@@ -76,10 +77,10 @@ class StubLLM:
         return "ANSWER: 1"
 
 
-def _run(script):
+def _run(script, arm=ARM_RESAMPLE):
     tool = StubTool(script)
     llm = StubLLM()
-    ep = run_episode(tool, Executor(tool), llm, TASK, run_idx=0)
+    ep = run_episode(tool, Executor(tool), llm, TASK, run_idx=0, arm=arm)
     return ep, tool, llm
 
 
@@ -137,3 +138,24 @@ def test_executed_sql_is_always_tool_minted():
     ep, tool, _ = _run([BAD, EMPTY, OK])
     for a in ep["attempts"]:
         assert tool.verify(a["tool_output_id"], a["sql"])
+
+
+def test_repair_arm_passes_previous_sql_and_error():
+    """Arm 3's only difference: attempt 0 is bare, every re-query carries the
+    previous SQL and the executor error. Question stays the original, since
+    repair composition happens inside the tool, not here."""
+    _, tool, _ = _run([BAD], arm=ARM_REPAIR)
+    assert len(tool.calls) > 1, "loop did not resample; test proves nothing"
+    assert tool.calls[0]["previous_sql"] is None
+    assert tool.calls[0]["executor_error"] is None
+    for c in tool.calls[1:]:
+        assert c["previous_sql"] == BAD
+        assert c["executor_error"]
+        assert c["question"] == TASK["question"]
+
+
+def test_repair_arm_substitutes_the_empty_result_constant():
+    """The empty branch has no executor error, so the frozen constant stands in.
+    This is the whole of _repair_context's logic and nothing else covers it."""
+    _, tool, _ = _run([EMPTY], arm=ARM_REPAIR)
+    assert tool.calls[1]["executor_error"] == CONFIG["repair"]["empty_result_message"]

@@ -25,20 +25,24 @@ def _git_commit() -> str | None:
 
 
 class Tracer:
-    def __init__(self, runs_dir, run_tag: str, config_hash: str, orchestrator_model: str):
+    def __init__(self, runs_dir, run_tag: str, arm: int, run_idx: int,
+                 config_hash: str, orchestrator_model: str):
         # Tag guards the "smoke numbers are never reported" rule at the filename
         # level: smoke and main runs can never land in the same file
         assert run_tag in {"smoke", "main"}, f"unexpected run_tag: {run_tag}"
         runs_dir = Path(runs_dir)
         runs_dir.mkdir(parents=True, exist_ok=True)
         ts = time.strftime("%Y%m%d_%H%M%S")
-        self.path = runs_dir / f"{run_tag}_{ts}_{config_hash}.jsonl"
+        self.path = runs_dir / f"{run_tag}_arm{arm}_k{run_idx}_{ts}_{config_hash}.jsonl"
         self._fh = self.path.open("a", buffering=1) # line-buffered: a crash keeps prior episodes
         self._base = {
             "run_tag": run_tag,
+            "arm": arm,
+            "run_idx": run_idx,
             "config_hash": config_hash,
             "orchestrator_model": orchestrator_model,
         }
+        self._closed = False
         self._write({"event": "run_open", "started_at": time.time(), "git_commit": _git_commit()})
 
 
@@ -52,8 +56,11 @@ class Tracer:
         self._fh.write(json.dumps({"ts": time.time(), **self._base, **record}, default=str) + "\n")
 
 
-    def close(self) -> None:
-        self._write({"event": "run_close", "ended_at": time.time()})
+    def close(self, **fields) -> None:
+        if self._closed:
+            return
+        self._closed = True
+        self._write({"event": "run_close", "ended_at": time.time(), **fields})
 
     def __enter__(self):
         return self
