@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import sqlite3
 import sys
 import time
 from collections import defaultdict
@@ -14,10 +13,10 @@ ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "vendor"))
 
-from paths import DB_DIR, REPO_ROOT
+from paths import REPO_ROOT
 from agent.config import CONFIG_HASH
 from agent.tool import Tool
-from agent.executor import Executor
+from agent.executor import Executor, read_only_query
 from agent.llm import LLM
 from agent.extraction import EXTRACTION_SYSTEM, extract_prompt
 from agent.trace import Tracer
@@ -26,18 +25,6 @@ from bench.grader import grade, parse_answer
 BENCH = REPO_ROOT / "bench" / "bench.jsonl"
 ARM = 1
 RUN_IDX = 0 # smoke is k=1; this is run 0
-
-
-def read_only_query(db_id: str, sql: str):
-    db = DB_DIR / db_id / f"{db_id}.sqlite"
-    con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
-    con.text_factory = lambda b: b.decode(errors="replace")
-    try:
-        return con.execute(sql).fetchall(), None
-    except Exception as e:
-        return None, str(e)
-    finally:
-        con.close()
 
 
 def run_single_shot(tool, executor, llm, task):

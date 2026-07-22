@@ -14,13 +14,32 @@ from paths import DB_DIR
 class ExecResult:
     ok: bool
     rows: Optional[list]     # full result on success; the grading object
-    error: Optional[list]    # structured message on failure; fed to the tool on repair
+    error: Optional[str]    # structured message on failure; fed to the tool on repair
     truncated: bool = False  # True iff the model-facing view dropped rows
 
 
     def model_view(self) -> list:
         cap = CONFIG["executor"]["max_result_rows"]
         return self.rows[:cap] if self.rows else []
+
+
+def _connect(db_id: str) -> sqlite3.Connection:
+    """Every read of a benchmark DB goes through here."""
+    db = DB_DIR / db_id / f"{db_id}.sqlite"
+    con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    con.text_factory = lambda b: b.decode(errors="replace")
+    return con
+
+
+def read_only_query(db_id: str, sql: str) -> tuple:
+    """Schema introspection for the tool's prompt builder."""
+    con = _connect(db_id)
+    try:
+        return con.execute(sql).fetchall(), None
+    except Exception as e:
+        return None, str(e)
+    finally:
+        con.close()
 
 
 class Executor:
@@ -39,9 +58,7 @@ class Executor:
 
 
     def _execute(self, db_id: str, sql: str) -> ExecResult:
-        db = DB_DIR / db_id / f"{db_id}.sqlite"
-        con = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
-        con.text_factory = lambda b: b.decode(errors="replace")
+        con = _connect(db_id)
 
         # Opcode-budget abort: SQLite has no wall-clock timeout.
         # The budget only has to be high enough that no legitimate
