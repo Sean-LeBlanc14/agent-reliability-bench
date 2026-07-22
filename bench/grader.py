@@ -137,7 +137,7 @@ def parse_answer(text: str):
             # flat list -> single row
             if all(not isinstance(r, (list, dict)) for r in val):
                 return [val], "json"
-        if isinstance(val, (int, float, str)):
+        if val is None or isinstance(val, (int, float, str)):
             return [[val]],"json"
         return None, "unparseable"
     except (json.JSONDecodeError, ValueError):

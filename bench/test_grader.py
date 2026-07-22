@@ -63,6 +63,7 @@ check("parse empty text", parse_answer(""), (None, "no_answer"))
 check("parse json dict rejected", parse_answer('ANSWER: {"a": 1}'), (None, "unparseable"))
 check("parse quoted string stripped", parse_answer('ANSWER: "France"'), ([["France"]], "json"))
 check("parse empty json array", parse_answer("ANSWER: []"), ([], "json"))
+check("parse json null scalar", parse_answer("ANSWER: null"), ([[None]], "json"))
 
 
 # ---------- grade (end to end, incl. precomputed order_matters flag) ----------
@@ -81,5 +82,6 @@ check("grade order not required", grade("ANSWER: [[2], [1]]", [[1], [2]], False)
 check("grade empty gold correct", grade("ANSWER: []", [], False), (True, "correct"))
 check("grade empty gold wrong", grade("ANSWER: [[1]]", [], False), (False, "wrong"))
 check("grade int vs float", grade("ANSWER: [[5]]", [[5.0]], False), (True, "correct"))
+check("grade null answer", grade("ANSWER: null", [[None]], False), (True, "correct"))
 
 print("\nall grader tests passed.")

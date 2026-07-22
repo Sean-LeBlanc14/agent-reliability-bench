@@ -1,0 +1,8 @@
+anthropic
+python-dotenv
+torch
+transformers
+peft
+bitsandbytes
+accelerate
+datasets

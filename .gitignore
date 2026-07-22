@@ -6,3 +6,4 @@ runs/
 data
 *.sqlite
 .env
+tmp_*

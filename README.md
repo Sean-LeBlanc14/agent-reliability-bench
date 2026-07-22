@@ -18,12 +18,12 @@ Tool model: Qwen2.5-Coder-1.5B + QLoRA adapter
   less than pass@1 across the ladder — repair raises average success
   but is unstable run-to-run.
 
-*Amended 2026-07-19 (Day 3, pre-baseline), before any agent data: H1b restated as the
+*Amended 2026-07-19, before any agent data was collected: H1b restated as the
 error-feedback effect at equal retry budget, matching the pinned arm-2 (resample-only) semantics.*
 
 ## Design
 
-### Architecture (Config B)
+### Architecture
 
 Two models, held constant across all three arms:
 
@@ -59,7 +59,7 @@ query orders its result; otherwise comparison is multiset (duplicate-sensitive).
 accepted, numerics are coerced and rounded, and unparseable answers are their own failure status. No LLM
 judge. The comparison core is inherited from the Project 1 scorer, where it was validated by unit tests
 and produced the published execution-accuracy numbers; the grader here adds the answer-parsing layer
-(44 tests total). **Secondary diagnostic (logged, not primary):** row-level match of the final executed
+(46 tests total). **Secondary diagnostic (logged, not primary):** row-level match of the final executed
 SQL against gold; divergence between the primary (ANSWER) result and this is the **interpretation-failure
 rate** — a wrong answer off a right query, observable in every arm.
 
@@ -78,11 +78,11 @@ result set; beyond ~20 rows the task measures output-length stamina rather
 than reliability. The threshold was fixed from the pool's row-count
 distribution (p95 = 28, then a cliff to 753+) prior to measuring any arm.
 
-**Empty-gold (0 rows) is excluded at the same pre-sampling filter:** the empty-result repair trigger
-would otherwise fire on a correct query that legitimately returns nothing and penalize it.
-`49`/1,034 excluded from the pool. Added 2026-07-19 (Day 3, pre-baseline), before any
-agent data; the deterministic seed-42 sample was regenerated so both gold-shape eligibility rules apply
-before the draw.
+Empty gold results (0 rows) are excluded at the same pre-sampling filter, since the
+empty-result repair trigger would otherwise fire on a correct query that legitimately
+returns nothing and penalize it. 49/1,034 excluded from the pool. This rule was added
+2026-07-19, before any agent data was collected; the deterministic seed-42 sample was
+regenerated so that both gold-shape eligibility rules apply before the draw.
 
 Each task stores the question, db_id, gold SQL, executed gold rows, official
 difficulty, and an `order_matters` flag (true iff the gold query has a
@@ -96,4 +96,17 @@ during Project 1's contamination audit.
 
 ## Reproduce
 
-*(pending)*
+```bash
+pip install -r requirements.txt
+export ANTHROPIC_API_KEY=...          # orchestrator calls
+
+python bench/classify_difficulty.py   # Spider dev -> difficulty labels
+python bench/sample_benchmark.py      # eligibility filter + stratified sample (seed 42)
+python bench/build_bench.py           # execute gold -> bench.jsonl
+python bench/test_grader.py           # 46 tests, no data or model needed
+
+python run_smoke.py                   # arm 1, k=1, pipeline validation
+python analysis/failure_breakdown.py  # pass@1 + ANSWER-vs-rows decomposition
+```
+
+Traces land in `runs/` (gitignored); per-run reports in `analysis/reports/`.
