@@ -89,3 +89,23 @@ Stop. Run the checks below. Only then start the remaining eight cells.
 - [ ] Open one arm-3 repair prompt from this `main` trace and confirm it matches the
       frozen template. `config_hash` covers the parameters but not a path or import
       surprise between smoke and main invocation
+
+## Post-run corrections
+
+The k=3 run completed under tag `p2-frozen` (commit 9ca1c7e). Two checklist
+items were wrong in ways the live run exposed. Recorded here rather than
+edited above, so the checklist stays the version that was actually run.
+
+- **`systemd-inhibit` does not work on WSL2.** The wrapper fails with
+  "Access denied" — under WSL, sleep and suspend are controlled by Windows,
+  not the Linux side, so no Linux-side inhibitor applies. The equivalent is
+  setting the Windows power plan (standby/hibernate timeouts to 0 on AC).
+  Run cells were launched unwrapped.
+
+- **`run_close` present does NOT mean a cell finished.** `Tracer.__exit__`
+  writes `run_close` even when an exception propagates, so a crashed cell
+  carries one too. Episode count (== bench size) is the only reliable
+  completion gate. A mid-run network outage confirmed this: seven cells died
+  with 0 episodes, and all seven still recorded `run_close`. The unguarded
+  `for` loop compounded it by continuing past each nonzero exit — a relaunch
+  used `set -e` so a repeat outage would cost one cell, not seven.

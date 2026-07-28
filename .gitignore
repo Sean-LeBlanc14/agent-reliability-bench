@@ -7,3 +7,4 @@ data
 *.sqlite
 .env
 tmp_*
+launch.log
