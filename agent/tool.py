@@ -114,6 +114,11 @@ class Tool:
         return {"sql": sql, "tool_output_id": tool_output_id, "prompt": prompt, "error_truncated": error_truncated}
 
 
+    @property
+    def model_id(self) -> str:
+        return BASE_MODEL_ID
+
+
     def verify(self, tool_output_id: str, sql: str) -> bool:
         return self._registry.get(tool_output_id) == sql
 

@@ -1,4 +1,7 @@
-"""Arm 2 and 3 over a bench slice. Tag `smoke` for pipeline checks, `main` for reported runs"""
+"""
+Arm 2 and 3 over a bench slice. Tag `smoke` for pipeline checks, `main` for reported runs,
+`ablation` for the exploratory tool swap.
+"""
 
 from __future__ import annotations
 
@@ -23,6 +26,12 @@ from agent.trace import Tracer
 
 BENCH = REPO_ROOT / "bench" / "bench.jsonl"
 
+NOTES = {
+    "smoke": "pipeline check - not a reported number",
+    "main": "reported run",
+    "ablation": "exploratory - not in the confirmatory tier",
+}
+
 
 def main():
     ap = argparse.ArgumentParser()
@@ -30,7 +39,7 @@ def main():
     ap.add_argument("--task-ids", default=None, help="comma-separated; overrides --limit")
     ap.add_argument("--arm", type=int, choices=[ARM_RESAMPLE, ARM_REPAIR], default=ARM_RESAMPLE)
     ap.add_argument("--run-idx", type=int, default=0, help="k index; seeds derive from it")
-    ap.add_argument("--tag", choices=["smoke", "main"], default="smoke")
+    ap.add_argument("--tag", choices=["smoke", "main", "ablation"], default="smoke")
     args = ap.parse_args()
 
     tasks = [json.loads(l) for l in open(BENCH)]
@@ -47,7 +56,7 @@ def main():
     episodes = []
     t0 = time.perf_counter()
 
-    with Tracer(REPO_ROOT / "runs", args.tag, args.arm, args.run_idx, CONFIG_HASH, llm.model) as tracer:
+    with Tracer(REPO_ROOT / "runs", args.tag, args.arm, args.run_idx, CONFIG_HASH, llm.model, tool.model_id) as tracer:
         for task in tasks:
             ep = run_episode(tool, executor, llm, task, args.run_idx, arm=args.arm)
             tracer.log_episode(**ep)
@@ -59,7 +68,7 @@ def main():
     n = len(episodes)
     correct = sum(int(e["correct"]) for e in episodes)
 
-    note = "pipeline check - not a reported number" if args.tag == "smoke" else "reported run"
+    note = NOTES[args.tag]
     print(f"\n\narm {args.arm} run_idx {args.run_idx} [{args.tag}] {note}")
     print(f"traces: {tracer.path}")
     print(f"episodes: {n}  wall: {dt:.1f}s  ({dt / n:.2f}s/episode)")

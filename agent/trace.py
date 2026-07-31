@@ -26,10 +26,10 @@ def _git_commit() -> str | None:
 
 class Tracer:
     def __init__(self, runs_dir, run_tag: str, arm: int, run_idx: int,
-                 config_hash: str, orchestrator_model: str):
+                 config_hash: str, orchestrator_model: str, tool_model: str):
         # Tag guards the "smoke numbers are never reported" rule at the filename
-        # level: smoke and main runs can never land in the same file
-        assert run_tag in {"smoke", "main"}, f"unexpected run_tag: {run_tag}"
+        # level: smoke, main, and ablation runs can never land in the same file
+        assert run_tag in {"smoke", "main", "ablation"}, f"unexpected run_tag: {run_tag}"
         runs_dir = Path(runs_dir)
         runs_dir.mkdir(parents=True, exist_ok=True)
         ts = time.strftime("%Y%m%d_%H%M%S")
@@ -41,6 +41,7 @@ class Tracer:
             "run_idx": run_idx,
             "config_hash": config_hash,
             "orchestrator_model": orchestrator_model,
+            "tool_model": tool_model,
         }
         self._closed = False
         self._write({"event": "run_open", "started_at": time.time(), "git_commit": _git_commit()})
