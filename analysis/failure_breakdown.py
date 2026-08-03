@@ -36,32 +36,34 @@ def load_episodes(trace_path):
     return [r for r in recs if r.get("event") == "episode"], header
 
 
+def classify(e, bench) -> str:
+    """Bucket one episode. One source of truth for the counts and the worklist."""
+    if e["correct"]:
+        return "correct"
+    # run_arm1 and loop emit different strings for the same terminal state
+    if e["terminal_reason"] in ("exhausted_exec_failed", "exec_failed"):
+        return "no_runnable_sql"
+    if e["terminal_reason"] == "exhausted_empty":
+        return "exhausted_empty"
+    task = bench[e["task_id"]]
+    rows = e["attempts"][-1]["rows"]
+    if compare_results(task["gold_rows"], rows, task["order_matters"]):
+        return "interpretation_failure"
+    return "tool_wrong"
+
+
 def decompose(episodes, bench):
-    """
-    Bucket every episode. Interpretation failure is the load-bearing one: the
-    final executed rows match gold, so the SQL was right and the ANSWER was not.
-    """
     b = defaultdict(int)
     for e in episodes:
         b["total"] += 1
-        if e["correct"]:
-            b["correct"] += 1
-            continue
-        if e["terminal_reason"] != "answered":
-            b["exec_failed"] += 1
-            continue
-        task = bench[e["task_id"]]
-        rows = e["attempts"][-1]["rows"]
-        if compare_results(task["gold_rows"], rows, task["order_matters"]):
-            b["interpretation_failure"] += 1
-        else:
-            b["tool_wrong"] += 1
+        b[classify(e, bench)] += 1
     return b
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("trace", nargs="?", help="trace file (default: most recent in runs/)")
+    ap.add_argument("--worklist", help="write bucketed episode identities to this path")
     args = ap.parse_args()
 
     trace = args.trace or sorted(glob.glob(str(REPO_ROOT / "runs" / "*.jsonl")))[-1]
@@ -89,11 +91,29 @@ def main():
                 c = sum(e["correct"] for e in sub)
                 print(f"  {d:6s}: {c}/{len(sub)} = {c / len(sub):.1%}")
         print(f"failures: {n - b['correct']}")
-        print(f"  exec failed (repair-addressable) : {b['exec_failed']}")
+        print(f"  no runnable SQL                  : {b['no_runnable_sql']}")
+        print(f"  exhausted empty                  : {b['exhausted_empty']}")
         print(f"  wrong SQL                        : {b['tool_wrong']}")
         print(f"  interpretation failure           : {b['interpretation_failure']}"
               f"  ({b['interpretation_failure'] / n:.1%} of episodes)")
         print()
+
+    if args.worklist:
+        # Join key for failure_labels.jsonl: every label traceable to a frozen episode
+        with open(args.worklist, "w") as f:
+            for i, e in enumerate(episodes):
+                bucket = classify(e, bench)
+                if bucket == "correct":
+                    continue
+                f.write(json.dumps({
+                    "task_id": e["task_id"],
+                    "arm": e["arm"],
+                    "run_idx": e["run_idx"],
+                    "bucket": bucket,
+                    "trace": Path(trace).name,
+                    "episode_idx": i,
+                }) + "\n")
+        print(f"worklist: {args.worklist}")
 
 
 if __name__ == "__main__":

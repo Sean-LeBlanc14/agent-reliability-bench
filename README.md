@@ -80,6 +80,9 @@ Three-arm comparison, same orchestrator + tool, same benchmark:
 
 Arms 2 and 3 share an identical step cap, so H1b never confounds feedback with extra attempts.
 **Repair triggers (exactly two, both `if` statements):** (1) SQL execution error, (2) empty result set.
+Because a successful non-empty execution terminates the episode, repair fires only on already-failed 
+states and cannot degrade a correct answer. This is a property of the conservative trigger set, not an 
+empirical finding.
 
 Grading: each arm emits `ANSWER: <value(s)>` through a **shared answer-extraction prompt** (one module,
 imported by every arm, so extraction is held constant and the ladder isolates loop effects), parsed and
