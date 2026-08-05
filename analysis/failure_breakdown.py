@@ -64,6 +64,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("trace", nargs="?", help="trace file (default: most recent in runs/)")
     ap.add_argument("--worklist", help="write bucketed episode identities to this path")
+    ap.add_argument("--run-idx", type=int, help="restrict worklist to one run index")
     args = ap.parse_args()
 
     trace = args.trace or sorted(glob.glob(str(REPO_ROOT / "runs" / "*.jsonl")))[-1]
@@ -102,6 +103,8 @@ def main():
         # Join key for failure_labels.jsonl: every label traceable to a frozen episode
         with open(args.worklist, "w") as f:
             for i, e in enumerate(episodes):
+                if args.run_idx is not None and e["run_idx"] != args.run_idx:
+                    continue
                 bucket = classify(e, bench)
                 if bucket == "correct":
                     continue
