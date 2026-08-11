@@ -52,6 +52,27 @@ def classify(e, bench) -> str:
     return "tool_wrong"
 
 
+def flatten(x):
+    if isinstance(x, (list, tuple)):
+        return [v for i in x for v in flatten(i)]
+    return [x]
+
+
+def unsupported(e):
+    """Scalars in the ANSWER that appear nowhere in the rows the tool returned.
+
+    Null is instructed behavior for a missing value, so it is not a fabrication.
+    Truncated display makes this uncheckable by eye, hence the full-row check.
+    """
+    raw = e["answer_raw"].split("ANSWER:", 1)[-1].strip()
+    try:
+        vals = flatten(json.loads(raw))
+    except json.JSONDecodeError:
+        return None
+    have = {str(v) for v in flatten(e["attempts"][-1].get("rows") or [])}
+    return [v for v in vals if v is not None and str(v) not in have]
+
+
 def decompose(episodes, bench):
     b = defaultdict(int)
     for e in episodes:
