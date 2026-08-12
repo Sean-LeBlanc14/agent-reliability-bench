@@ -1,7 +1,9 @@
 """
-generate_sql() tool: the fine-tuned Qwen adapter as a function, question in,
-SQL out. Three study invariants are enforced here, structurally, so it can't
-be ignored the  way a prompt instruction can:
+generate_sql() tool: a Qwen model as a function, question in, SQL out. Loads
+the fine-tuned adapter by default, or the base instruct model when adapter_dir
+is None, which is the only variable in the tool-swap ablation. Three study
+invariants are enforced here, structurally, so it can't be ignored the  way a
+prompt instruction can:
 
     - No authorship: the id is bound to the exact SQL string emitted; verify()
       checks identity and content, so the orchestrator can neither run untagged
@@ -45,13 +47,16 @@ class Tool:
     def __init__(self, run_query: RunQuery, adapter_dir=ADAPTER_DIR):
         self._run_query = run_query          # read-only, schema introspection only
         self._registry: dict[str, str] = {} # tool_output_id -> exact SQL, for verify()
+        self._has_adapter = adapter_dir is not None
 
         self._tokenizer = AutoTokenizer.from_pretrained(BASE_MODEL_ID)
         if self._tokenizer.pad_token is None:
             self._tokenizer.pad_token = self._tokenizer.eos_token
 
         # Reproduce training's 4-bit config since the adapter was learned
-        # against these quantized weights
+        # against these quantized weights. The base-model path keeps it too,
+        # unjustified by training but required by the ablation: quantization
+        # has to be held constant so the adapter is the only variable.
         bnb = BitsAndBytesConfig(
             load_in_4bit=True,
             bnb_4bit_quant_type="nf4",
@@ -64,7 +69,11 @@ class Tool:
             dtype=torch.bfloat16,
             device_map={"": 0},
         )
-        self._model = PeftModel.from_pretrained(base, str(adapter_dir))
+        self._model = (
+            PeftModel.from_pretrained(base, str(adapter_dir))
+            if self._has_adapter
+            else base
+        )
         self._model.eval()
         self._device = next(self._model.parameters()).device
 
@@ -83,7 +92,7 @@ class Tool:
             raise ValueError(
                 "repair context is both or neither: pass previous_sql and executor_error together"
             )
-        
+
         error_truncated = False
         if previous_sql is not None:
             error_text, error_truncated = _truncate_error(executor_error)
@@ -116,7 +125,10 @@ class Tool:
 
     @property
     def model_id(self) -> str:
-        return BASE_MODEL_ID
+        # Distinguishes the two tools in tool_model, which is the ablation's
+        # only difference from the main runs. Frozen traces carry the bare
+        # BASE_MODEL_ID from before this split.
+        return f"{BASE_MODEL_ID}+qlora-adapter" if self._has_adapter else BASE_MODEL_ID
 
 
     def verify(self, tool_output_id: str, sql: str) -> bool:
@@ -160,4 +172,3 @@ def _truncate_error(error_text: str) -> tuple[str, bool]:
     if len(error_text) <= cap:
         return error_text, False
     return error_text[:cap] + " ...[truncated]", True
-
