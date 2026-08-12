@@ -23,6 +23,9 @@ from paths import REPO_ROOT
 
 DIFFICULTIES = ("easy", "medium", "hard", "extra")
 
+KEYS = ("total", "correct", "no_runnable_sql", "exhausted_empty", "final_empty",
+        "tool_wrong", "degraded", "interpretation_failure")
+
 
 def load_bench():
     path = REPO_ROOT / "bench" / "bench.jsonl"
@@ -73,10 +76,28 @@ def unsupported(e):
     return [v for v in vals if v is not None and str(v) not in have]
 
 
+def degraded(e) -> bool:
+    """Empty result at attempt i followed by an exec error at attempt i+1.
+
+    Mechanical stand-in for the dropped repair-induced-regression label, which
+    was unreachable: a successful non-empty execution ends the episode, so
+    repair only ever fires on already-failed states.
+    """
+    a = e["attempts"]
+    return any(
+        a[i]["trigger"] == "empty_result" and not a[i + 1]["exec_ok"]
+        for i in range(len(a) - 1)
+    )
+
+
 def decompose(episodes, bench):
     b = defaultdict(int)
     for e in episodes:
         b["total"] += 1
+        if e["attempts"][-1].get("rows") == []:
+            b["final_empty"] += 1
+        if degraded(e):
+            b["degraded"] += 1
         b[classify(e, bench)] += 1
     return b
 
@@ -84,6 +105,7 @@ def decompose(episodes, bench):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("trace", nargs="?", help="trace file (default: most recent in runs/)")
+    ap.add_argument("--out", help="append per-cell counts as JSONL to this path")
     ap.add_argument("--worklist", help="write bucketed episode identities to this path")
     ap.add_argument("--run-idx", type=int, help="restrict worklist to one run index")
     args = ap.parse_args()
@@ -91,6 +113,9 @@ def main():
     trace = args.trace or sorted(glob.glob(str(REPO_ROOT / "runs" / "*.jsonl")))[-1]
     episodes, header = load_episodes(trace)
     bench = load_bench()
+
+    if args.out and header.get("git_commit") != "9ca1c7e":
+        raise SystemExit(f"{Path(trace).name} is not from the frozen commit")
 
     print(f"trace : {Path(trace).name}")
     print(f"tag   : {header.get('run_tag')}  config: {header.get('config_hash')}  "
@@ -115,10 +140,23 @@ def main():
         print(f"failures: {n - b['correct']}")
         print(f"  no runnable SQL                  : {b['no_runnable_sql']}")
         print(f"  exhausted empty                  : {b['exhausted_empty']}")
+        print(f"  final result empty (any terminal)  : {b['final_empty']}")
         print(f"  wrong SQL                        : {b['tool_wrong']}")
+        print(f"  repair-induced degradation         : {b['degraded']}")
         print(f"  interpretation failure           : {b['interpretation_failure']}"
               f"  ({b['interpretation_failure'] / n:.1%} of episodes)")
         print()
+
+        if args.out:
+            with open(args.out, "a") as f:
+                f.write(json.dumps({
+                    "arm": arm,
+                    "run_idx": eps[0]["run_idx"],
+                    "trace": Path(trace).name,
+                    "git_commit": header.get("git_commit"),
+                    "config_hash": header.get("config_hash"),
+                    **{k: b[k] for k in KEYS},
+                }) + "\n")
 
     if args.worklist:
         # Join key for failure_labels.jsonl: every label traceable to a frozen episode
