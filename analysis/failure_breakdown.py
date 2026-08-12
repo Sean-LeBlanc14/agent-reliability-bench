@@ -24,7 +24,7 @@ from paths import REPO_ROOT
 DIFFICULTIES = ("easy", "medium", "hard", "extra")
 
 KEYS = ("total", "correct", "no_runnable_sql", "exhausted_empty", "final_empty",
-        "tool_wrong", "degraded", "interpretation_failure")
+        "tool_wrong", "degraded", "interpretation_failure", "attempt_pairs", "verbatim_repeats")
 
 
 def load_bench():
@@ -90,10 +90,26 @@ def degraded(e) -> bool:
     )
 
 
+def repeats(e):
+    """Consecutive attempt pairs whose SQL is byte-identical.
+
+    Pre-registered because the render check caught the tool re-emitting the
+    previous query. Exact match, no normalization: a whitespace difference
+    means a different token sequence, which is what "did feedback change the
+    output" is asking.
+    """
+    a = e["attempts"]
+    pairs = [(a[i]["sql"], a[i + 1]["sql"]) for i in range(len(a) - 1)]
+    return len(pairs), sum(p == q for p, q in pairs)
+
+
 def decompose(episodes, bench):
     b = defaultdict(int)
     for e in episodes:
         b["total"] += 1
+        p, r = repeats(e)
+        b["attempt_pairs"] += p
+        b["verbatim_repeats"] += r
         if e["attempts"][-1].get("rows") == []:
             b["final_empty"] += 1
         if degraded(e):
@@ -104,13 +120,13 @@ def decompose(episodes, bench):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("trace", nargs="?", help="trace file (default: most recent in runs/)")
+    ap.add_argument("trace", help="trace file")
     ap.add_argument("--out", help="append per-cell counts as JSONL to this path")
     ap.add_argument("--worklist", help="write bucketed episode identities to this path")
     ap.add_argument("--run-idx", type=int, help="restrict worklist to one run index")
     args = ap.parse_args()
 
-    trace = args.trace or sorted(glob.glob(str(REPO_ROOT / "runs" / "*.jsonl")))[-1]
+    trace = args.trace
     episodes, header = load_episodes(trace)
     bench = load_bench()
 
@@ -143,6 +159,9 @@ def main():
         print(f"  final result empty (any terminal)  : {b['final_empty']}")
         print(f"  wrong SQL                        : {b['tool_wrong']}")
         print(f"  repair-induced degradation         : {b['degraded']}")
+        if b["attempt_pairs"]:
+            print(f"  verbatim repetition                : {b['verbatim_repeats']}/{b['attempt_pairs']}"
+                  f" = {b['verbatim_repeats'] / b['attempt_pairs']:.1%} of consecutive pairs")
         print(f"  interpretation failure           : {b['interpretation_failure']}"
               f"  ({b['interpretation_failure'] / n:.1%} of episodes)")
         print()
