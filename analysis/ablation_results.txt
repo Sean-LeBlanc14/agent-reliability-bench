@@ -1,5 +1,5 @@
-trace : ablation_arm2_k0_20260812_154051_d05cf2c0b135.jsonl
-tag   : ablation  config: d05cf2c0b135  commit: ffe0a27
+trace : ablation_arm2_k0_20260812_184324_d05cf2c0b135.jsonl
+tag   : ablation  config: d05cf2c0b135  commit: b70a5a8
 model : claude-haiku-4-5-20251001
 
 --- arm 2  (150 episodes) ---
@@ -17,8 +17,8 @@ failures: 58
   verbatim repetition                : 4/78 = 5.1% of consecutive pairs
   interpretation failure           : 1  (0.7% of episodes)
 
-trace : ablation_arm3_k0_20260812_155432_d05cf2c0b135.jsonl
-tag   : ablation  config: d05cf2c0b135  commit: ffe0a27
+trace : ablation_arm3_k0_20260812_185637_d05cf2c0b135.jsonl
+tag   : ablation  config: d05cf2c0b135  commit: b70a5a8
 model : claude-haiku-4-5-20251001
 
 --- arm 3  (150 episodes) ---
