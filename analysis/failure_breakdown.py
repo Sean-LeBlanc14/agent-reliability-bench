@@ -136,7 +136,8 @@ def main():
     print(f"trace : {Path(trace).name}")
     print(f"tag   : {header.get('run_tag')}  config: {header.get('config_hash')}  "
           f"commit: {header.get('git_commit')}")
-    print(f"model : {header.get('orchestrator_model')}\n")
+    print(f"model : {header.get('orchestrator_model')}")
+    print(f"tool  : {header.get('tool_model')}\n")
 
     by_arm = defaultdict(list)
     for e in episodes:
