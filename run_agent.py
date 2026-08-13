@@ -16,7 +16,7 @@ ROOT = Path(__file__).parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "vendor"))
 
-from paths import REPO_ROOT
+from paths import REPO_ROOT, ADAPTER_DIR
 from agent.config import CONFIG, CONFIG_HASH
 from agent.tool import Tool
 from agent.executor import Executor, read_only_query
@@ -49,7 +49,7 @@ def main():
     elif args.limit:
         tasks = tasks[: args.limit]
 
-    tool = Tool(read_only_query)
+    tool = Tool(read_only_query, adapter_dir=None if args.tag == "ablation" else ADAPTER_DIR)
     executor = Executor(tool)
     llm = LLM()
 
@@ -70,6 +70,7 @@ def main():
 
     note = NOTES[args.tag]
     print(f"\n\narm {args.arm} run_idx {args.run_idx} [{args.tag}] {note}")
+    print(f"tool: {tool.model_id}")
     print(f"traces: {tracer.path}")
     print(f"episodes: {n}  wall: {dt:.1f}s  ({dt / n:.2f}s/episode)")
     print(f"pass@1: {correct}/{n}")

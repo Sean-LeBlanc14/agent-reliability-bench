@@ -1,0 +1,44 @@
+trace : ablation_arm2_k0_20260812_154051_d05cf2c0b135.jsonl
+tag   : ablation  config: d05cf2c0b135  commit: ffe0a27
+model : claude-haiku-4-5-20251001
+
+--- arm 2  (150 episodes) ---
+pass@1: 92/150 = 61.3%
+  easy  : 30/38 = 78.9%
+  medium: 40/65 = 61.5%
+  hard  : 14/25 = 56.0%
+  extra : 8/22 = 36.4%
+failures: 58
+  no runnable SQL                  : 19
+  exhausted empty                  : 6
+  final result empty (any terminal)  : 6
+  wrong SQL                        : 32
+  repair-induced degradation         : 7
+  verbatim repetition                : 4/78 = 5.1% of consecutive pairs
+  interpretation failure           : 1  (0.7% of episodes)
+
+trace : ablation_arm3_k0_20260812_155432_d05cf2c0b135.jsonl
+tag   : ablation  config: d05cf2c0b135  commit: ffe0a27
+model : claude-haiku-4-5-20251001
+
+--- arm 3  (150 episodes) ---
+pass@1: 86/150 = 57.3%
+  easy  : 26/38 = 68.4%
+  medium: 36/65 = 55.4%
+  hard  : 15/25 = 60.0%
+  extra : 9/22 = 40.9%
+failures: 64
+  no runnable SQL                  : 25
+  exhausted empty                  : 12
+  final result empty (any terminal)  : 12
+  wrong SQL                        : 26
+  repair-induced degradation         : 0
+  verbatim repetition                : 37/88 = 42.0% of consecutive pairs
+  interpretation failure           : 1  (0.7% of episodes)
+
+arm 2 k0
+  empty_result     2/ 15 = 13.3%
+  exec_error       2/ 63 =  3.2%
+arm 3 k0
+  empty_result    15/ 23 = 65.2%
+  exec_error      22/ 65 = 33.8%

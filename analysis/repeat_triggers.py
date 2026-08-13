@@ -13,7 +13,7 @@ from pathlib import Path
 for path in sys.argv[1:]:
     recs = [json.loads(l) for l in open(path)]
     header = next(r for r in recs if r.get("event") == "run_open")
-    assert header["git_commit"] == "9ca1c7e", path
+    assert header["git_commit"] == "9ca1c7e" or header["run_tag"] == "ablation", path
     eps = [r for r in recs if r.get("event") == "episode"]
 
     pairs, rep = defaultdict(int), defaultdict(int)
